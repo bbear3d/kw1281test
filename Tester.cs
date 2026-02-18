@@ -578,7 +578,10 @@ internal class Tester
                     Log.WriteLine($"SKC: {skc:D5}");
                 }
             }
-            else if (ecuInfo.Text.Contains("VDO"))
+            else if (
+                ecuInfo.Text.Contains("VDO") ||
+                ecuInfo.Text.Contains("V2721446") ||
+                ecuInfo.Text.Contains("V2823466"))
             {
                 var cluster = new VdoCluster(_kwp1281);
                 string[] partNumberGroups = FindAndParsePartNumber(ecuInfo.Text);
