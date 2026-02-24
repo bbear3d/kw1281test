@@ -425,8 +425,9 @@ internal class VdoCluster : ICluster
             case "V599HLA  00.91": // 7D0920841A V18
             case "V599LLA  00.91": // 7D0920801B V18
             case "V599LLA  01.00": // 1J0920800L V59
-            case "V599MLA  01.00": // 7D0920821D V22
             case "V599LLA  03.00": // 1J0920900J V60
+            case "V599MLA  01.00": // 7D0920821D V22
+            case "V599MLA  03.00": // 3B0920920B V26
                 return [[0x38, 0x3F, 0x40, 0x35]];
 
             case "MPV300LL 04.00":
