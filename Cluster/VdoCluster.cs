@@ -480,6 +480,7 @@ internal class VdoCluster : ICluster
             case "KPQMLA` $01": // 6Y1920860G V12
                 return [[0x47, 0x3B, 0x31, 0x3F]];
 
+            case "K5MJ07HH 09.00": // 5J0920840B V92
             case "K5MJ07LM 08.10": // 5J0920810C V2721446
             case "K5MJ07LM 09.00": // 5J0920900B V2823466
                 return [[0x47, 0x3F, 0x39, 0x44]];
