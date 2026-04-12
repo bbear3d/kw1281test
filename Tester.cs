@@ -367,12 +367,12 @@ internal class Tester
         switch (_controllerAddress)
         {
             case (int)ControllerAddress.Cluster:
-                DumpClusterEeprom((ushort)address, (ushort)length, filename);
+                ClusterDumpEeprom((ushort)address, (ushort)length, filename);
                 break;
             case (int)ControllerAddress.CCM:
             case (int)ControllerAddress.CentralElectric:
             case (int)ControllerAddress.CentralLocking:
-                DumpCcmEeprom((ushort)address, (ushort)length, filename);
+                CcmDumpEeprom((ushort)address, (ushort)length, filename);
                 break;
             default:
                 Log.WriteLine("Only supported for cluster, CCM, Central Locking and Central Electric");
@@ -402,7 +402,7 @@ internal class Tester
             return;
         }
 
-        DumpClusterMem(address, length, filename);
+        ClusterDumpMem(address, length, filename);
     }
 
     public void DumpRam(uint startAddr, uint length, string? filename)
@@ -594,7 +594,7 @@ internal class Tester
                     if (partNumberGroups[1] == "919") // Non-CAN
                     {
                         startAddress = 0x1FA;
-                        dumpFileName = DumpClusterEeprom(startAddress, length: 6, filename: null);
+                        dumpFileName = ClusterDumpEeprom(startAddress, length: 6, filename: null);
                         buf = File.ReadAllBytes(dumpFileName);
                         skc = Utils.GetBcd(buf, 0);
                         ushort skc2 = Utils.GetBcd(buf, 2);
@@ -607,7 +607,7 @@ internal class Tester
                     else if (partNumberGroups[1] == "920") // CAN
                     {
                         startAddress = 0x90;
-                        dumpFileName = DumpClusterEeprom(startAddress, length: 0x7C, filename: null);
+                        dumpFileName = ClusterDumpEeprom(startAddress, length: 0x7C, filename: null);
                         buf = File.ReadAllBytes(dumpFileName);
                         skc = VdoCluster.GetSkc(buf, startAddress);
                     }
@@ -683,7 +683,7 @@ internal class Tester
 
                 cluster.UnlockForEepromReadWrite();
 
-                var dumpFileName = DumpBOOClusterEeprom(
+                var dumpFileName = BOOClusterDumpEeprom(
                     startAddress: 0, length: 0x10, filename: null);
 
                 var buf = File.ReadAllBytes(dumpFileName);
@@ -796,12 +796,12 @@ internal class Tester
         switch (_controllerAddress)
         {
             case (int)ControllerAddress.Cluster:
-                LoadClusterEeprom((ushort)address, filename);
+                ClusterLoadEeprom((ushort)address, filename);
                 break;
             case (int)ControllerAddress.CCM:
             case (int)ControllerAddress.CentralElectric:
             case (int)ControllerAddress.CentralLocking:
-                LoadCcmEeprom((ushort)address, filename);
+                CcmLoadEeprom((ushort)address, filename);
                 break;
             default:
                 Log.WriteLine("Only supported for cluster, CCM, Central Locking and Central Electric");
@@ -814,12 +814,12 @@ internal class Tester
         switch (_controllerAddress)
         {
             case (int)ControllerAddress.Cluster:
-                MapClusterEeprom(filename);
+                ClusterMapEeprom(filename);
                 break;
             case (int)ControllerAddress.CCM:
             case (int)ControllerAddress.CentralElectric:
             case (int)ControllerAddress.CentralLocking:
-                MapCcmEeprom(filename);
+                CcmMapEeprom(filename);
                 break;
             default:
                 Log.WriteLine("Only supported for cluster, CCM, Central Locking and Central Electric");
@@ -955,9 +955,46 @@ internal class Tester
         _kwp1281.WriteEeprom((ushort)address, new List<byte> { value });
     }
 
+    public void WriteRam(uint address, byte value)
+    {
+        switch (_controllerAddress)
+        {
+            case (int)ControllerAddress.Cluster:
+                ClusterWriteRam((ushort)address, value);
+                break;
+            default:
+                Log.WriteLine("Only supported for cluster");
+                break;
+        }
+
+    }
+
     // End top-level commands
 
-    private string DumpBOOClusterEeprom(ushort startAddress, ushort length, string? filename)
+    private void ClusterWriteRam(ushort address, byte value)
+    {
+        // TODO: Verify cluster is VDO
+
+        var vdoCluster = new VdoCluster(_kwp1281);
+        if (!vdoCluster.RequiresSeedKey())
+        {
+            Log.WriteLine(
+                "Cluster is unlocked for memory access. Skipping Seed/Key login.");
+        }
+        else
+        {
+            var (isUnlocked, softwareVersion) = vdoCluster.Unlock();
+            if (!isUnlocked)
+            {
+                Log.WriteLine("Unknown cluster software version. Memory access will likely fail.");
+            }
+            vdoCluster.SeedKeyAuthenticate(softwareVersion);
+        }
+
+        vdoCluster.WriteRam(address, value);
+    }
+
+    private string BOOClusterDumpEeprom(ushort startAddress, ushort length, string? filename)
     {
         var identInfo = _kwp1281.ReadIdent().First().ToString()
             .Split(Environment.NewLine).First() // Sometimes ReadIdent() can return multiple lines
@@ -982,7 +1019,7 @@ internal class Tester
         return dumpFileName;
     }
 
-    private string DumpClusterEeprom(
+    private string ClusterDumpEeprom(
         ushort startAddress, ushort length, string? filename)
     {
         var identInfo = _kwp1281.ReadIdent().First().ToString()
@@ -1001,7 +1038,7 @@ internal class Tester
         return dumpFileName;
     }
 
-    private void MapCcmEeprom(string? filename)
+    private void CcmMapEeprom(string? filename)
     {
         UnlockControllerForEepromReadWrite();
 
@@ -1020,7 +1057,7 @@ internal class Tester
         File.WriteAllBytes(dumpFileName, bytes.ToArray());
     }
 
-    private void MapClusterEeprom(string? filename)
+    private void ClusterMapEeprom(string? filename)
     {
         var cluster = new VdoCluster(_kwp1281);
 
@@ -1031,7 +1068,7 @@ internal class Tester
         File.WriteAllBytes(mapFileName, map.ToArray());
     }
 
-    private void DumpCcmEeprom(ushort startAddress, ushort length, string? filename)
+    private void CcmDumpEeprom(ushort startAddress, ushort length, string? filename)
     {
         UnlockControllerForEepromReadWrite();
 
@@ -1061,22 +1098,22 @@ internal class Tester
 
             case ControllerAddress.Cluster:
                 // TODO:UnlockCluster() is only needed for EEPROM read, not memory read
-                var cluster = new VdoCluster(_kwp1281);
-                var (isUnlocked, softwareVersion) = cluster.Unlock();
+                var vdoCluster = new VdoCluster(_kwp1281);
+                var (isUnlocked, softwareVersion) = vdoCluster.Unlock();
                 if (!isUnlocked)
                 {
                     Log.WriteLine("Unknown cluster software version. EEPROM access will likely fail.");
                 }
 
-                if (!cluster.RequiresSeedKey())
+                if (!vdoCluster.RequiresSeedKey())
                 {
                     Log.WriteLine(
                         "Cluster is unlocked for ROM/EEPROM access. Skipping Seed/Key login.");
                     return;
                 }
 
-                cluster.SeedKeyAuthenticate(softwareVersion);
-                if (cluster.RequiresSeedKey())
+                vdoCluster.SeedKeyAuthenticate(softwareVersion);
+                if (vdoCluster.RequiresSeedKey())
                 {
                     Log.WriteLine("Failed to unlock cluster.");
                 }
@@ -1141,7 +1178,7 @@ internal class Tester
         }
     }
 
-    private void LoadCcmEeprom(ushort address, string filename)
+    private void CcmLoadEeprom(ushort address, string filename)
     {
         _ = _kwp1281.ReadIdent();
 
@@ -1160,7 +1197,7 @@ internal class Tester
         WriteEeprom(address, bytes, 8);
     }
 
-    private void LoadClusterEeprom(ushort address, string filename)
+    private void ClusterLoadEeprom(ushort address, string filename)
     {
         _ = _kwp1281.ReadIdent();
 
@@ -1179,28 +1216,30 @@ internal class Tester
         WriteEeprom(address, bytes, 16);
     }
 
-    private void DumpClusterMem(uint startAddress, uint length, string? filename)
+    private void ClusterDumpMem(uint startAddress, uint length, string? filename)
     {
-        var cluster = new VdoCluster(_kwp1281);
-        if (!cluster.RequiresSeedKey())
+        // TODO: Verify cluster is VDO
+
+        var vdoCluster = new VdoCluster(_kwp1281);
+        if (!vdoCluster.RequiresSeedKey())
         {
             Log.WriteLine(
                 "Cluster is unlocked for memory access. Skipping Seed/Key login.");
         }
         else
         {
-            var (isUnlocked, softwareVersion) = cluster.Unlock();
+            var (isUnlocked, softwareVersion) = vdoCluster.Unlock();
             if (!isUnlocked)
             {
                 Log.WriteLine("Unknown cluster software version. Memory access will likely fail.");
             }
-            cluster.SeedKeyAuthenticate(softwareVersion);
+            vdoCluster.SeedKeyAuthenticate(softwareVersion);
         }
 
         var dumpFileName = filename ?? $"cluster_mem_0x{startAddress:X6}.bin";
         Log.WriteLine($"Saving memory dump to {dumpFileName}");
 
-        cluster.DumpMem(dumpFileName, startAddress, length);
+        vdoCluster.DumpMem(dumpFileName, startAddress, length);
 
         Log.WriteLine($"Saved memory dump to {dumpFileName}");
     }

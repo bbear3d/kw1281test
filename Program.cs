@@ -105,7 +105,8 @@ class Program
 
         if (string.Compare(command, "ReadEeprom", ignoreCase: true) == 0 ||
             string.Compare(command, "ReadRAM", ignoreCase: true) == 0 ||
-            string.Compare(command, "ReadROM", ignoreCase: true) == 0)
+            string.Compare(command, "ReadROM", ignoreCase: true) == 0 ||
+            string.Compare(command, "WriteRAM", ignoreCase: true) == 0)
         {
             if (args.Length < 5)
             {
@@ -433,6 +434,10 @@ class Program
                 tester.WriteEeprom(address, value);
                 break;
 
+            case "writeram":
+                tester.WriteRam(address, value);
+                break;
+
             default:
                 ShowUsage();
                 break;
@@ -647,6 +652,9 @@ COMMAND =
         ADDRESS = EEPROM address in decimal (0-511) or hex (0x00-0x1FF)
         VALUE = Value to be stored in decimal (0-255) or hex (0x00-0xFF)
     WriteEeprom ADDRESS VALUE
+        ADDRESS = Address in decimal (e.g. 4361) or hex (e.g. 0x1109)
+        VALUE = Value in decimal (e.g. 138) or hex (e.g. 0x8A)
+    WriteRAM ADDRESS VALUE
         ADDRESS = Address in decimal (e.g. 4361) or hex (e.g. 0x1109)
         VALUE = Value in decimal (e.g. 138) or hex (e.g. 0x8A)
 """);

@@ -800,6 +800,20 @@ internal class VdoCluster : ICluster
         }
     }
 
+    public void WriteRam(ushort address, byte value)
+    {
+        Log.WriteLine("Sending Custom \"Write RAM\" block");
+
+        SendCustom(
+            [
+                0x87,
+                1, // Count
+                (byte)(address & 0xFF),
+                (byte)((address >> 8) & 0xFF),
+                value
+            ]);
+    }
+
     private readonly IKW1281Dialog _kwp1281;
     private bool _additionalCustomCommandsUnlocked;
 
