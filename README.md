@@ -82,6 +82,9 @@ COMMAND =
     GroupRead GROUP
         GROUP = Group number (0-255)
         (Group 0: Raw controller data)
+    LoadEdc15Eeprom [START] FILENAME
+        START = Optional start address in decimal (e.g. 0) or hex (e.g. 0x0), default 0
+        FILENAME = Name of file containing binary data to write into the EDC15 EEPROM
     LoadEeprom START FILENAME
         START = Start address in decimal (e.g. 0) or hex (e.g. 0x0)
         FILENAME = Name of file containing binary data to load into EEPROM

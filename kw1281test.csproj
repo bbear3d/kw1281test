@@ -34,7 +34,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<EmbeddedResource Include="EDC15\Loader.bin" />
+		<EmbeddedResource Include="EDC15\Loader-EEPROM.bin" />
 	</ItemGroup>
 
 	<ItemGroup>

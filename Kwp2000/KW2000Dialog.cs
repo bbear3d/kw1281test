@@ -1,4 +1,5 @@
 ﻿using BitFab.KW1281Test.Kwp2000;
+using BitFab.KW1281Test.Logging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -12,6 +13,16 @@ namespace BitFab.KW1281Test
     internal class KW2000Dialog
     {
         private const byte _testerAddress = 0xF1;
+
+        /// <summary>
+        /// True (default) logs <see cref="SendMessage"/>/<see cref="ReceiveMessage"/>'s routine
+        /// per-message trace lines ("Sent: ...", "Received: ...") to the normal, on-screen-visible
+        /// destination. Set false for a caller that drives this dialog in a tight loop -- e.g. an
+        /// EDC15 EEPROM write, which can run these hundreds of times for a full rewrite -- to route
+        /// those same lines to <see cref="LogDest.File"/> instead: still captured in the log file
+        /// for later inspection, just not flooding the console.
+        /// </summary>
+        public bool VerboseLog { get; set; } = true;
 
         /// <summary>
         /// Inter-command delay (milliseconds)
@@ -193,7 +204,7 @@ namespace BitFab.KW1281Test
 
             _kwpCommon.WriteByte(checksum);
 
-            Log.WriteLine($"Sent: {message}");
+            Log.WriteLine($"Sent: {message}", VerboseLog ? LogDest.All : LogDest.File);
         }
 
         public Kwp2000Message ReceiveMessage()
@@ -222,7 +233,7 @@ namespace BitFab.KW1281Test
 
             var message = new Kwp2000Message(
                 formatByte, destAddress, srcAddress, lengthByte, service, body, checksum);
-            Log.WriteLine($"Received: {message}");
+            Log.WriteLine($"Received: {message}", VerboseLog ? LogDest.All : LogDest.File);
             return message;
         }
 

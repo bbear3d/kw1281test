@@ -213,6 +213,17 @@ class Program
                 return;
             }
         }
+        else if (string.Compare(command, "LoadEdc15Eeprom", ignoreCase: true) == 0)
+        {
+            if (args.Length < 6)
+            {
+                ShowUsage();
+                return;
+            }
+
+            address = Utils.ParseUint(args[4]);
+            _filename = args[5];
+        }
         else if (string.Compare(command, "AdaptationRead", ignoreCase: true) == 0)
         {
             if (args.Length < 5)
@@ -388,6 +399,20 @@ class Program
 
             case "loadeeprom":
                 tester.LoadEeprom(address, _filename!);
+                break;
+
+            case "loadedc15eeprom":
+            {
+                // No pre-write dump: ask the loader for a post-write, pre-reboot read-back and show
+                // that (what's actually on the ECU now).
+                byte[]? postWrite = null;
+                tester.LoadEdc15Eeprom(
+                    address, _filename!, onPostWriteReadback: img => postWrite = img);
+                if (postWrite is { Length: 512 })
+                {
+                    Edc15VM.DisplayEepromInfo(postWrite);
+                }
+            }
                 break;
 
             case "mapeeprom":
@@ -630,6 +655,9 @@ COMMAND =
     GroupRead GROUP
         GROUP = Group number (0-255)
         (Group 0: Raw controller data)
+    LoadEdc15Eeprom START FILENAME
+        START = EEPROM start address in decimal (0-511) or hex (0x00-0x1FF)
+        FILENAME = Name of file containing binary data to write into the EDC15 EEPROM
     LoadEeprom START FILENAME
         START = Start address in decimal (e.g. 0) or hex (e.g. 0x0)
         FILENAME = Name of file containing binary data to load into EEPROM

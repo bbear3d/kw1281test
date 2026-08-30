@@ -339,27 +339,92 @@ internal class Tester
     }
 
     public byte[] ReadWriteEdc15Eeprom(
-        string? filename, List<KeyValuePair<ushort, byte>>? addressValuePairs = null)
+        string? filename,
+        List<KeyValuePair<ushort, byte>>? addressValuePairs = null,
+        Action<byte[]>? onPostWriteReadback = null)
     {
-        _kwp1281.EndCommunication();
-
-        Thread.Sleep(1000);
-
-        // Now wake it up again, hopefully in KW2000 mode
-        _kwpCommon!.Interface.SetBaudRate(10400);
-        var kwpVersion = _kwpCommon.WakeUp((byte)_controllerAddress, evenParity: false);
-        if (kwpVersion < 2000)
+        // Session-level retry (incorporates gmenounos/kw1281test#185): the K-line occasionally drops
+        // the whole KW2000 session mid-way through the slow loader upload. Rather than fail the whole
+        // command on a transient timeout, restart the wakeup -> session -> loader-upload sequence up
+        // to maxAttempts times. Safe for writes too: each attempt re-uploads a fresh loader and, for
+        // a write, re-sends the same absolute (address, value) pairs -- an EEPROM re-write is
+        // idempotent -- and the in-session verify (onPostWriteReadback) runs on the successful attempt.
+        const int maxAttempts = 3;
+        for (var attempt = 1; ; attempt++)
         {
-            throw new InvalidOperationException(
-                $"Unable to wake up ECU in KW2000 mode. KW version: {kwpVersion}");
+            try
+            {
+                _kwp1281.EndCommunication();
+
+                Thread.Sleep(1000);
+
+                // Now wake it up again, hopefully in KW2000 mode
+                _kwpCommon!.Interface.SetBaudRate(10400);
+                var kwpVersion = _kwpCommon.WakeUp((byte)_controllerAddress, evenParity: false);
+                if (kwpVersion < 2000)
+                {
+                    throw new InvalidOperationException(
+                        $"Unable to wake up ECU in KW2000 mode. KW version: {kwpVersion}");
+                }
+                Log.WriteLine($"KW Version: {kwpVersion}");
+
+                var edc15 = new Edc15VM(_kwpCommon, _controllerAddress);
+
+                // Pass filename through as-is (nullable): on a pure read ReadWriteEeprom falls back to a
+                // default name; on a WRITE a null filename means "don't take a pre-write dump" rather
+                // than silently writing one to a default file.
+                return edc15.ReadWriteEeprom(filename, addressValuePairs, onPostWriteReadback);
+            }
+            catch (TimeoutException) when (attempt < maxAttempts)
+            {
+                Log.WriteLine(
+                    $"Timed out talking to ECU over KW2000 (attempt {attempt}/{maxAttempts})." +
+                    " Restarting session...");
+            }
         }
-        Log.WriteLine($"KW Version: {kwpVersion}");
+    }
 
-        var edc15 = new Edc15VM(_kwpCommon, _controllerAddress);
+    /// <summary>
+    /// Like <see cref="ReadWriteEdc15Eeprom"/>, but the address/value pairs to write come from
+    /// reading a raw binary file starting at <paramref name="startAddress"/>, rather than being
+    /// typed in one by one -- mirrors <see cref="LoadEeprom"/>'s shape (a START address plus an
+    /// input file) applied to EDC15's KWP2000 write path. Writes via the batched Loader-EEPROM.bin
+    /// path. Takes no pre-write dump: the loader sets up its own EEPROM-bus GPIO directions at the
+    /// start of every write command (the EInit routine, see <see cref="Edc15VM.ReadWriteEeprom"/>).
+    /// <paramref name="onPostWriteReadback"/>, when set, receives the loader's in-session, pre-reboot
+    /// read-back of the EEPROM for verification.
+    /// </summary>
+    public byte[] LoadEdc15Eeprom(
+        uint startAddress, string inputFilename,
+        Action<byte[]>? onPostWriteReadback = null)
+    {
+        if (!File.Exists(inputFilename))
+        {
+            Log.WriteLine($"File {inputFilename} does not exist.");
+            return [];
+        }
 
-        var dumpFileName = filename ?? $"EDC15_EEPROM.bin";
+        Log.WriteLine($"Reading {inputFilename}");
+        var bytes = File.ReadAllBytes(inputFilename);
 
-        return edc15.ReadWriteEeprom(dumpFileName, addressValuePairs);
+        if (startAddress + bytes.Length > 512)
+        {
+            throw new ArgumentException(
+                $"File is {bytes.Length} bytes starting at 0x{startAddress:X}, which extends " +
+                "past the EEPROM's 512-byte range (0-0x1FF). Trim the file or choose a lower " +
+                "start address.");
+        }
+
+        var addressValuePairs = new List<KeyValuePair<ushort, byte>>(bytes.Length);
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            addressValuePairs.Add(new KeyValuePair<ushort, byte>((ushort)(startAddress + i), bytes[i]));
+        }
+
+        Log.WriteLine(
+            $"Writing {bytes.Length} bytes to EDC15 EEPROM starting at 0x{startAddress:X}...");
+
+        return ReadWriteEdc15Eeprom(null, addressValuePairs, onPostWriteReadback);
     }
 
     public void DumpEeprom(uint address, uint length, string? filename)
