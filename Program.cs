@@ -355,6 +355,21 @@ class Program
                 return;
             }
 
+            case "dumpedc15flashboot":
+                // Boot mode: a lower-level 28800-baud path that requires the ECU to be physically
+                // placed into boot mode before power-up. Edc15BootModeVM does its own handshake.
+                tester.DumpEdc15FlashBoot(args.Length > 4 ? args[4] : null);
+                return;
+
+            case "loadedc15flashboot":
+                if (args.Length < 5)
+                {
+                    ShowUsage();
+                    return;
+                }
+                tester.LoadEdc15FlashBoot(args[4]);
+                return;
+
             default:
                 break;
         }
@@ -778,6 +793,12 @@ COMMAND =
         SPEED = Low | Medium | High (default Medium)
         full = Write every sector (default: skip sectors whose checksum already matches)
         noverify = Skip the post-write per-sector checksum verify
+    DumpEdc15FlashBoot [FILENAME]
+        FILENAME = Optional output filename
+        (Boot mode: ECU must be physically in boot mode before power-up; fixed 28800 baud)
+    LoadEdc15FlashBoot FILENAME
+        FILENAME = Binary flash image to write
+        (Boot mode: ECU must be physically in boot mode before power-up; fixed 28800 baud)
     LoadEdc15Eeprom [START] FILENAME
         (arguments may be given in any order)
         START = Optional EEPROM start address in decimal (0-511) or hex (0x00-0x1FF); default 0

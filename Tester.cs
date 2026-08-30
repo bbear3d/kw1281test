@@ -695,6 +695,99 @@ internal class Tester
         }
     }
 
+    /// Reads the full EDC15 external flash (512KB) via the microcontroller's own hardware boot
+    /// mode -- a completely different, lower-level path than <see cref="DumpEdc15Flash"/> (which
+    /// talks KWP2000 to the ECU's normal firmware, transparently handling recovery mode itself).
+    /// Requires the ECU to already be physically placed into boot mode before this is
+    /// called (a manual hardware procedure this app can't trigger itself) and the interface to
+    /// already be at 28800 baud (see CommandCatalog.FixedBaudCommands).
+    /// </summary>
+    public void DumpEdc15FlashBoot(
+        string? filename, Action<string>? onChecksumWarning = null, Func<bool>? isStopRequested = null)
+    {
+        // See DumpEdc15Flash's identical stopwatch reasoning.
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var bootMode = new Edc15BootModeVM(_kwpCommon.Interface);
+            bootMode.Connect(isStopRequested);
+
+            var dumpFileName = filename ?? "EDC15_Flash_BootMode.bin";
+            Log.WriteLine($"Reading EDC15 flash (boot mode) to {dumpFileName}...");
+            bootMode.ReadFlash(
+                dumpFileName,
+                onPercent: percent => Log.WriteLine($"{percent}%"),
+                isStopRequested: isStopRequested);
+            Log.WriteLine("Done!");
+
+            // Same checksum sanity-check as DumpEdc15Flash -- the flash
+            // content is identical regardless of which path read it, so a mismatch
+            // here is just as meaningful a "this read may be corrupted, consider redoing it" signal.
+            try
+            {
+                var readBytes = File.ReadAllBytes(dumpFileName);
+                var checksumResult = Edc15Checksum.Verify(readBytes);
+                if (checksumResult.Supported && !checksumResult.Valid)
+                {
+                    var message =
+                        $"The checksums stored in {dumpFileName} don't match its contents " +
+                        $"({checksumResult.RegionsMismatched} of {checksumResult.RegionsChecked} " +
+                        $"region(s), {checksumResult.Algorithm} algorithm). This can mean the read " +
+                        "was corrupted or interrupted partway through -- consider reading again.";
+                    Log.WriteLine($"\nWARNING: {message}\n");
+                    onChecksumWarning?.Invoke(message);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.WriteLine($"(Checksum verification skipped: {ex.Message})\n");
+            }
+        }
+        finally
+        {
+            Log.WriteLine($"Read time: {FormatElapsed(stopwatch.Elapsed)}");
+        }
+    }
+
+    /// <summary>
+    /// Writes a full 512KB EDC15 external-flash image via the microcontroller's own hardware boot
+    /// mode -- the write counterpart to <see cref="DumpEdc15FlashBoot"/>, and a completely different,
+    /// lower-level path than <see cref="LoadEdc15Flash"/> (which talks KWP2000 to the ECU's normal
+    /// firmware). Requires the ECU to already be physically placed into boot mode and the interface
+    /// to already be at 28800 baud (see CommandCatalog.FixedBaudCommands). Whole-chip-erases the flash
+    /// (validated on hardware), then programs the image. See
+    /// <see cref="Edc15BootModeVM.EraseAndWriteFlash"/> for the register-level protocol.
+    /// </summary>
+    public void LoadEdc15FlashBoot(string filename, Func<bool>? isStopRequested = null)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var image = File.ReadAllBytes(filename);
+            if (image.Length != Edc15BootModeVM.FlashSize)
+            {
+                Log.WriteLine(
+                    $"ERROR: {filename} is {image.Length} bytes; a boot-mode flash image must be " +
+                    $"exactly {Edc15BootModeVM.FlashSize} (0x{Edc15BootModeVM.FlashSize:X}) bytes. Aborting.");
+                return;
+            }
+
+            var bootMode = new Edc15BootModeVM(_kwpCommon.Interface);
+            bootMode.ConnectForWrite(isStopRequested);
+
+            Log.WriteLine($"Writing EDC15 flash (boot mode, whole-chip erase) from {filename}...");
+            bootMode.EraseAndWriteFlash(
+                image,
+                onPercent: percent => Log.WriteLine($"{percent}%"),
+                isStopRequested: isStopRequested);
+            Log.WriteLine("Done!");
+        }
+        finally
+        {
+            Log.WriteLine($"Write time: {FormatElapsed(stopwatch.Elapsed)}");
+        }
+    }
+
     public void DumpEeprom(uint address, uint length, string? filename)
     {
         switch (_controllerAddress)

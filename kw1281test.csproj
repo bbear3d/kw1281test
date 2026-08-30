@@ -37,6 +37,9 @@
 		<EmbeddedResource Include="EDC15\Loader-EEPROM.bin" />
 		<EmbeddedResource Include="EDC15\Loader-sector-erase.bin" />
 		<EmbeddedResource Include="EDC15\Loader-flash.bin" />
+		<EmbeddedResource Include="EDC15\Loader-boot-stage1.bin" />
+		<EmbeddedResource Include="EDC15\Loader-boot-monitor.bin" />
+		<EmbeddedResource Include="EDC15\Loader-boot-flash.bin" />
 	</ItemGroup>
 
 	<ItemGroup>
