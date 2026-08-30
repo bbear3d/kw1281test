@@ -59,6 +59,9 @@ COMMAND =
     DelcoVWPremium5SafeCode
     DumpEdc15Eeprom [FILENAME]
         FILENAME = Optional filename
+    DumpEdc15Flash [SPEED] [FILENAME]
+        SPEED = low|medium|high link speed (default medium)
+        FILENAME = Optional filename
     DumpEeprom START LENGTH [FILENAME]
         START = Start address in decimal (e.g. 0) or hex (e.g. 0x0)
         LENGTH = Number of bytes in decimal (e.g. 2048) or hex (e.g. 0x800)
@@ -85,6 +88,11 @@ COMMAND =
     LoadEdc15Eeprom [START] FILENAME
         START = Optional start address in decimal (e.g. 0) or hex (e.g. 0x0), default 0
         FILENAME = Name of file containing binary data to write into the EDC15 EEPROM
+    LoadEdc15Flash [SPEED] [full] [noverify] FILENAME
+        SPEED = low|medium|high link speed (default medium)
+        full = Force a whole-chip write instead of the per-sector checksum decide
+        noverify = Skip the post-write per-sector checksum verify
+        FILENAME = Name of file containing the flash image to write
     LoadEeprom START FILENAME
         START = Start address in decimal (e.g. 0) or hex (e.g. 0x0)
         FILENAME = Name of file containing binary data to load into EEPROM

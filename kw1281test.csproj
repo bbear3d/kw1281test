@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
@@ -35,6 +35,8 @@
 
 	<ItemGroup>
 		<EmbeddedResource Include="EDC15\Loader-EEPROM.bin" />
+		<EmbeddedResource Include="EDC15\Loader-sector-erase.bin" />
+		<EmbeddedResource Include="EDC15\Loader-flash.bin" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using Service = BitFab.KW1281Test.Kwp2000.DiagnosticService;
@@ -122,6 +123,38 @@ namespace BitFab.KW1281Test
                 messageBytes.ToArray());
 
             return responseMessage.Body.ToArray();
+        }
+
+        /// <summary>
+        /// Runs a KWP2000 SecurityAccess (service 0x27) exchange for <paramref name="accessMode"/>:
+        /// requests the seed, calls <paramref name="computeKey"/> to derive the key, and sends it
+        /// back as <paramref name="accessMode"/>+1. Returns true if access was granted (or no seed
+        /// challenge was required), false if the ECU rejected the key.
+        /// </summary>
+        public bool SecurityAccess(byte accessMode, Func<byte[], byte[]> computeKey)
+        {
+            var seedResponse = SendReceive(Service.securityAccess, new[] { accessMode });
+            var seedBytes = seedResponse.Body.Skip(1).ToArray();
+
+            if (seedBytes.Length == 0 || seedBytes.All(b => b == 0))
+            {
+                // Already unlocked / no seed challenge required.
+                return true;
+            }
+
+            var keyBytes = computeKey(seedBytes);
+            var keyMessage = new List<byte> { (byte)(accessMode + 1) };
+            keyMessage.AddRange(keyBytes);
+
+            try
+            {
+                _ = SendReceive(Service.securityAccess, keyMessage.ToArray());
+                return true;
+            }
+            catch (NegativeResponseException)
+            {
+                return false;
+            }
         }
 
         public Kwp2000Message SendReceive(
