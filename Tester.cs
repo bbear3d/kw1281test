@@ -430,12 +430,11 @@ internal partial class Tester
     /// its own ISO14230 fast-init handshake internally -- see <see cref="Edc15FlashVM.Connect"/>.
     /// </summary>
     /// <param name="onChecksumWarning">
-    /// Invoked once, after a successful read, only if <see cref="Edc15Checksum"/> recognizes the
-    /// dumped file's layout AND finds at least one region whose stored checksum doesn't match the
-    /// file's actual contents -- e.g. a read that completed but was subtly corrupted. Purely
-    /// informational (this never blocks or retries the read); a file whose layout isn't recognized
-    /// at all is silently skipped rather than reported as a warning, since "unrecognized" isn't
-    /// evidence of anything wrong. See <see cref="Edc15Checksum"/>'s own doc comment for why.
+    /// Invoked once, after a successful read, only if <see cref="Edc15Checksum"/> can read the
+    /// dumped image's verify driver AND at least one of its checks fails -- e.g. a read that
+    /// completed but was subtly corrupted. Purely informational (this never blocks or retries the
+    /// read); an image whose driver can't be read is only noted in the log, not reported as a
+    /// warning, since "can't verify" isn't evidence of anything wrong.
     /// </param>
     public void DumpEdc15Flash(
         Edc15FlashVM.Variant variant, string? filename, Action<string>? onChecksumWarning = null,
@@ -467,12 +466,16 @@ internal partial class Tester
                 if (checksumResult.Supported && !checksumResult.Valid)
                 {
                     var message =
-                        $"The checksums stored in {dumpFileName} don't match its contents " +
-                        $"({checksumResult.RegionsMismatched} of {checksumResult.RegionsChecked} " +
-                        $"region(s), {checksumResult.Algorithm} algorithm). This can mean the read " +
-                        "was corrupted or interrupted partway through -- consider reading again.";
-                    Log.WriteLine($"\nWARNING: {message}\n");
+                        $"The checksums in {dumpFileName} don't match its contents " +
+                        $"({checksumResult.ChecksFailed} of {checksumResult.ChecksTotal} check(s) of its " +
+                        "verify driver fail). This can mean the read was corrupted or interrupted " +
+                        "partway through -- consider reading again.";
+                    Log.WriteLine($"\nWARNING: {message}\n{checksumResult.Describe()}\n");
                     onChecksumWarning?.Invoke(message);
+                }
+                else if (!checksumResult.Supported)
+                {
+                    Log.WriteLine($"(Checksums not verified: {checksumResult.Reason})\n");
                 }
             }
             catch (Exception ex)
@@ -497,11 +500,11 @@ internal partial class Tester
     /// </summary>
     /// <param name="confirmChecksumCorrection">
     /// Invoked BEFORE any connection to the ECU is opened, only if <see cref="Edc15Checksum"/>
-    /// recognizes <paramref name="filename"/>'s layout AND finds at least one region whose stored
-    /// checksum doesn't match its contents. Returning true corrects the checksums in memory (and
-    /// persists the correction back to <paramref name="filename"/>) before flashing; returning
-    /// false (or a null callback) flashes the file exactly as given. A file whose layout isn't
-    /// recognized at all is never touched and never prompted about -- see
+    /// can read <paramref name="filename"/>'s verify driver AND at least one of its checks fails.
+    /// Returning true corrects the checksums in memory (and persists the correction back to
+    /// <paramref name="filename"/>) before flashing -- or aborts, if the correction is refused;
+    /// returning false (or a null callback) flashes the file exactly as given. A file whose driver
+    /// can't be read is never touched and never prompted about -- see
     /// <see cref="Edc15Checksum"/>'s own doc comment for why.
     /// </param>
     /// <param name="forceFullWrite">
@@ -576,11 +579,11 @@ internal partial class Tester
             if (checksumResult.Supported && !checksumResult.Valid)
             {
                 var message =
-                    $"The checksums stored in {filename} don't match its contents " +
-                    $"({checksumResult.RegionsMismatched} of {checksumResult.RegionsChecked} " +
-                    $"region(s), {checksumResult.Algorithm} algorithm). Flashing this file as-is will " +
-                    "write those same incorrect checksums to the ECU. Correct them first?";
-                Log.WriteLine($"\nWARNING: {message}\n");
+                    $"The checksums in {filename} don't match its contents " +
+                    $"({checksumResult.ChecksFailed} of {checksumResult.ChecksTotal} check(s) of its " +
+                    "verify driver fail). Flashing this file as-is will write an image the ECU's own " +
+                    "checksum test rejects. Correct them first?";
+                Log.WriteLine($"\nWARNING: {message}\n{checksumResult.Describe()}\n");
 
                 if (confirmChecksumCorrection == null)
                 {
@@ -605,8 +608,17 @@ internal partial class Tester
                 else if (confirmChecksumCorrection.Invoke(message))
                 {
                     var corrected = Edc15Checksum.VerifyAndCorrect(image);
+                    if (!corrected.Corrected)
+                    {
+                        // The model found a condition it can't account for (or couldn't converge), so a
+                        // correction would be a guess -- and the unmodified file is known to be bad.
+                        Log.WriteLine(
+                            $"ERROR: the checksums in {filename} can't be corrected safely: " +
+                            $"{corrected.RefusedReason} Nothing was sent to the ECU. Aborting.");
+                        return;
+                    }
                     File.WriteAllBytes(filename, image);
-                    Log.WriteLine($"Corrected {corrected.RegionsMismatched} checksum region(s) in {filename}.\n");
+                    Log.WriteLine($"Corrected {corrected.WordsCorrected} checksum correction word(s) in {filename}.\n");
                 }
                 else
                 {
@@ -616,24 +628,23 @@ internal partial class Tester
             }
             else if (!checksumResult.Supported)
             {
-                // Correct size, but the checksum layout isn't one this app recognizes -- so it can
-                // neither verify nor correct it. We can't confirm the file is even a sane EDC15 image,
+                // Correct size, but the image's verify driver can't be read -- so its checksums can
+                // be neither verified nor corrected. We can't confirm the file is even a sane EDC15 image,
                 // so by default we refuse rather than push an unverifiable file to the ECU. The only way
                 // past this is the deliberate opt-in (ProceedUnverified) -- never silent.
                 if (ProceedUnverified())
                 {
                     Log.WriteLine(
-                        $"NOTE: {filename}'s checksum layout isn't recognized, so it can't be verified -- " +
+                        $"NOTE: {filename}'s checksums can't be verified ({checksumResult.Reason}) -- " +
                         "writing it as-is at explicit request.\n");
                 }
                 else
                 {
                     Log.WriteLine(
-                        $"ERROR: couldn't verify {filename} -- its checksum layout isn't one this app " +
-                        "recognizes, so it can't be checked or corrected and might not be a valid EDC15 " +
-                        "flash image at all. Refusing to write an unverifiable file. Pass 'unverified' " +
-                        "to write it anyway. Nothing was sent to the ECU. " +
-                        "Aborting.");
+                        $"ERROR: couldn't verify {filename}: {checksumResult.Reason} It can't be checked " +
+                        "or corrected and might not be a valid EDC15 flash image at all. Refusing to " +
+                        "write an unverifiable file. Pass 'unverified' to write it anyway. Nothing was " +
+                        "sent to the ECU. Aborting.");
                     return;
                 }
             }
@@ -710,12 +721,16 @@ internal partial class Tester
                 if (checksumResult.Supported && !checksumResult.Valid)
                 {
                     var message =
-                        $"The checksums stored in {dumpFileName} don't match its contents " +
-                        $"({checksumResult.RegionsMismatched} of {checksumResult.RegionsChecked} " +
-                        $"region(s), {checksumResult.Algorithm} algorithm). This can mean the read " +
-                        "was corrupted or interrupted partway through -- consider reading again.";
-                    Log.WriteLine($"\nWARNING: {message}\n");
+                        $"The checksums in {dumpFileName} don't match its contents " +
+                        $"({checksumResult.ChecksFailed} of {checksumResult.ChecksTotal} check(s) of its " +
+                        "verify driver fail). This can mean the read was corrupted or interrupted " +
+                        "partway through -- consider reading again.";
+                    Log.WriteLine($"\nWARNING: {message}\n{checksumResult.Describe()}\n");
                     onChecksumWarning?.Invoke(message);
+                }
+                else if (!checksumResult.Supported)
+                {
+                    Log.WriteLine($"(Checksums not verified: {checksumResult.Reason})\n");
                 }
             }
             catch (Exception ex)

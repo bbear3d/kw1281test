@@ -114,9 +114,9 @@ public static class Edc16Checksum
                                   b.Length < DigestLength ? b.Length : DigestLength).ToLowerInvariant();
     }
 
-    /// <summary>Result of a <see cref="Verify"/> or <see cref="VerifyAndCorrect"/> call. Mirrors
-    /// <see cref="EDC15.Edc15Checksum.Result"/> so the write-path checksum gate is identical for
-    /// both ECU families.</summary>
+    /// <summary>Result of a <see cref="Verify"/> or <see cref="VerifyAndCorrect"/> call. Same
+    /// Supported/Valid shape as <see cref="EDC15.Edc15Checksum.Result"/>, so the write-path
+    /// checksum gate works the same way for both ECU families.</summary>
     public sealed class Result
     {
         /// <summary>False when the image size/layout isn't a recognized EDC16 flash: the other
